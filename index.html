@@ -1,5 +1,3 @@
-html
-Copiar código
 <!DOCTYPE html>
 <html>
 <head>
@@ -23,7 +21,6 @@ Copiar código
   <canvas id="gameCanvas" width="400" height="400"></canvas>
 
   <script>
-    // Inicialização do jogo Snake
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
@@ -31,11 +28,34 @@ Copiar código
     const gridSizeX = canvas.width / gridSize;
     const gridSizeY = canvas.height / gridSize;
 
-    let snake = [{x: 10, y: 10}];
+    let snake = [];
     let dx = gridSize;
     let dy = 0;
-    let food = {x: 15, y: 15};
+    let food = {};
 
+    // Função para atualizar o estado do jogo
+    function updateGame() {
+      fetch('snake.php', {
+        method: 'POST',
+        body: JSON.stringify({ snake: snake, food: food, dx: dx, dy: dy }),
+      })
+      .then(response => response.json())
+      .then(data => {
+        snake = data.snake;
+        food = data.food;
+
+        clearCanvas();
+        drawSnake();
+        drawFood();
+
+        if (data.gameOver) {
+          alert("Game Over!");
+          resetGame();
+        }
+      });
+    }
+
+    // Função para desenhar a cobra na tela
     function drawSnake() {
       ctx.fillStyle = "#008000";
       snake.forEach(segment => {
@@ -43,72 +63,26 @@ Copiar código
       });
     }
 
-    function moveSnake() {
-      const head = {x: snake[0].x + dx / gridSize, y: snake[0].y + dy / gridSize};
-      snake.unshift(head);
-
-      if (head.x === food.x && head.y === food.y) {
-        generateFood();
-      } else {
-        snake.pop();
-      }
-    }
-
-    function generateFood() {
-      food.x = Math.floor(Math.random() * gridSizeX);
-      food.y = Math.floor(Math.random() * gridSizeY);
-
-      snake.forEach(segment => {
-        if (segment.x === food.x && segment.y === food.y) {
-          generateFood();
-        }
-      });
-    }
-
+    // Função para desenhar a comida na tela
     function drawFood() {
       ctx.fillStyle = "#FF0000";
       ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
     }
 
+    // Função para limpar o canvas
     function clearCanvas() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    function checkCollision() {
-      const head = snake[0];
-
-      // Colisão com a parede
-      if (head.x < 0 || head.x >= gridSizeX || head.y < 0 || head.y >= gridSizeY) {
-        return true;
-      }
-
-      // Colisão com o próprio corpo
-      for (let i = 1; i < snake.length; i++) {
-        if (snake[i].x === head.x && snake[i].y === head.y) {
-          return true;
-        }
-      }
-
-      return false;
+    // Função para reiniciar o jogo
+    function resetGame() {
+      snake = [{x: 10, y: 10}];
+      dx = gridSize;
+      dy = 0;
+      food = {x: 15, y: 15};
     }
 
-    function main() {
-      if (checkCollision()) {
-        alert("Game Over!");
-        snake = [{x: 10, y: 10}];
-        dx = gridSize;
-        dy = 0;
-        food = {x: 15, y: 15};
-      }
-
-      clearCanvas();
-      moveSnake();
-      drawSnake();
-      drawFood();
-    }
-
-    setInterval(main, 100);
-
+    // Event listener para capturar as teclas pressionadas pelo usuário
     document.addEventListener("keydown", event => {
       const keyPressed = event.key;
 
@@ -139,6 +113,52 @@ Copiar código
           break;
       }
     });
+
+    // Inicialização do jogo: chamada inicial para atualizar o estado do jogo
+    updateGame();
+    setInterval(updateGame, 100);
   </script>
+
+  <?php
+    // PHP para processar a lógica do jogo e responder com o estado atualizado
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    $snake = $data['snake'];
+    $food = $data['food'];
+    $dx = $data['dx'];
+    $dy = $data['dy'];
+
+    // Atualização da posição da cabeça da cobra
+    $head = ['x' => $snake[0]['x'] + $dx / $gridSize, 'y' => $snake[0]['y'] + $dy / $gridSize];
+
+    array_unshift($snake, $head);
+
+    // Verificação de colisão com a comida
+    if ($head['x'] == $food['x'] && $head['y'] == $food['y']) {
+      $food['x'] = rand(0, $gridSizeX - 1);
+      $food['y'] = rand(0, $gridSizeY - 1);
+    } else {
+      array_pop($snake);
+    }
+
+    // Verificação de colisão da cobra com as bordas ou com seu próprio corpo
+    $gameOver = false;
+
+    if ($head['x'] < 0 || $head['x'] >= $gridSizeX || $head['y'] < 0 || $head['y'] >= $gridSizeY) {
+      $gameOver = true;
+    }
+
+    foreach (array_slice($snake, 1) as $segment) {
+      if ($segment['x'] == $head['x'] && $segment['y'] == $head['y']) {
+        $gameOver = true;
+        break;
+      }
+    }
+
+    // Responder com o estado atualizado do jogo
+    $response = ['snake' => $snake, 'food' => $food, 'gameOver' => $gameOver];
+    echo json_encode($response);
+  ?>
+
 </body>
 </html>
